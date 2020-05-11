@@ -1,5 +1,4 @@
-# istio-redirect-www
-istio redirect non-www to www
+# istio redirect non-www to www
 
 ~~~
 curl -I http://abdidarmawan.com
