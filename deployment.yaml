@@ -1,0 +1,135 @@
+## Deployment
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: staging-abdi
+  namespace: staging
+  labels:
+    app: staging-abdi
+spec:
+  replicas: 1
+  revisionHistoryLimit: 4
+  minReadySeconds: 20
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+     maxUnavailable: 0
+     maxSurge: 1
+  selector:
+    matchLabels:
+      app: staging-abdi   
+  template:
+    metadata:
+      labels:
+        app: staging-abdi
+        env: staging
+        version: v1
+      annotations:
+         sidecar.istio.io/rewriteAppHTTPProbers: "true" # Rewrite HTTP readiness and liveness probes to be redirected to istio-proxy sidecar.     
+    spec:
+      containers:
+      - name: staging-abdi
+        image: nginxdemos/hello:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+              cpu: "60m"
+              memory: "100m"
+          limits:
+              cpu: "1200m"
+              memory: "1200Mi"   
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 35
+          periodSeconds: 10
+        livenessProbe:
+           httpGet:
+             path: /
+             port: 80
+           initialDelaySeconds: 35
+           periodSeconds: 10
+        lifecycle: # (real) zero-downtime for rolling deployment
+          preStop:
+            exec:
+              command: ["sh", "-c", "sleep 8"]   
+---
+## Autoscaling
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: staging-abdi
+  namespace: staging
+spec:
+  maxReplicas: 1
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment
+    name: staging-abdi
+  targetCPUUtilizationPercentage: 60           
+---
+## Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-abdi
+  namespace: staging
+  labels:
+    app: staging-abdi
+spec:
+  ports:
+  - port: 80
+    name: http
+  selector:
+    app: staging-abdi
+---
+## Destination Rule
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: staging-abdi
+  namespace: staging
+spec:
+  host: staging-abdi
+---
+## Virtual Service NON-WWW
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: staging-abdi
+  namespace: staging
+spec:
+  hosts:
+  - abdidarmawan.com
+  gateways:
+  - gateway
+  http:
+  - match:
+    - uri:
+        exact: /
+    redirect:
+      uri: /
+      authority: www.abdidarmawan.com
+---
+## Virtual Service WWW
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: staging-abdi-www
+  namespace: staging
+spec:
+  hosts:
+  - www.abdidarmawan.com
+  gateways:
+  - gateway
+  http:
+  - match:
+    - uri:
+        prefix: / 
+    route:
+    - destination:
+        host: staging-abdi      
