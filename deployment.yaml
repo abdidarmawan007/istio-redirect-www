@@ -110,9 +110,9 @@ spec:
   http:
   - match:
     - uri:
-        exact: /
+        prefix: /
     redirect:
-      uri: /
+      prefix: /
       authority: www.abdidarmawan.com
 ---
 ## Virtual Service WWW
